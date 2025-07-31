@@ -1,46 +1,71 @@
-import { basekit, FieldType, field, FieldComponent, FieldCode, NumberFormatter, AuthorizationType } from '@lark-opdev/block-basekit-server-api';
-const { t } = field;
+import {
+  basekit,
+  FieldComponent,
+  FieldType,
+  FieldCode,
+  DateFormatter,
+} from '@lark-opdev/block-basekit-server-api';
 
-const feishuDm = ['feishu.cn', 'feishucdn.com', 'larksuitecdn.com', 'larksuite.com'];
-// 通过addDomainList添加请求接口的域名，不可写多个addDomainList，否则会被覆盖
-basekit.addDomainList([...feishuDm, 'api.exchangerate-api.com',]);
+// 安全设置
+basekit.addDomainList(['api.exchangerate-api.com']);
+
+// 货币列表
+const currencyOptions = [
+    { label: 'USD - $ 美元', value: 'USD' },
+    { label: 'EUR - € 欧元', value: 'EUR' },
+    { label: 'JPY - ¥ 日元', value: 'JPY' },
+    { label: 'GBP - £ 英镑', value: 'GBP' },
+    { label: 'CNY - ¥ 人民币', value: 'CNY' },
+    { label: 'AUD - $ 澳大利亚元', value: 'AUD' },
+    { label: 'CAD - $ 加拿大元', value: 'CAD' },
+    { label: 'CHF - Fr 瑞士法郎', value: 'CHF' },
+    { label: 'HKD - $ 港币', value: 'HKD' },
+    { label: 'SGD - $ 新加坡元', value: 'SGD' },
+    { label: 'SEK - kr 瑞典克朗', value: 'SEK' },
+    { label: 'NOK - kr 挪威克朗', value: 'NOK' },
+    { label: 'KRW - ₩ 韩元', value: 'KRW' },
+    { label: 'TWD - NT$ 新台币', value: 'TWD' },
+    { label: 'NZD - $ 新西兰元', value: 'NZD' },
+    { label: 'THB - ฿ 泰国铢', value: 'THB' },
+    { label: 'PHP - ₱ 菲律宾比索', value: 'PHP' },
+    { label: 'IDR - Rp 印度尼西亚盾', value: 'IDR' },
+    { label: 'MYR - RM 马来西亚林吉特', value: 'MYR' },
+    { label: 'RUB - ₽ 俄罗斯卢布', value: 'RUB' },
+    { label: 'INR - ₹ 印度卢比', value: 'INR' },
+    { label: 'BRL - R$ 巴西雷亚尔', value: 'BRL' },
+    { label: 'ZAR - R 南非兰特', value: 'ZAR' },
+    { label: 'MXN - $ 墨西哥比索', value: 'MXN' },
+    { label: 'PLN - zł 波兰兹罗提', value: 'PLN' },
+    // ... 更多货币
+];
 
 basekit.addField({
-  // 定义捷径的i18n语言资源
-  i18n: {
-    messages: {
-      'zh-CN': {
-        'rmb': '人民币金额',
-        'usd': '美元金额',
-        'rate': '汇率',
-      },
-      'en-US': {
-        'rmb': 'RMB Amount',
-        'usd': 'Dollar amount',
-        'rate': 'Exchange Rate',
-      },
-      'ja-JP': {
-        'rmb': '人民元の金額',
-        'usd': 'ドル金額',
-        'rate': '為替レート',
-      },
-    }
-  },
-  // 定义捷径的入参
   formItems: [
     {
-      key: 'account',
-      label: t('rmb'),
+      key: 'sourceAmountField',
+      label: '选择金额字段',
       component: FieldComponent.FieldSelect,
-      props: {
-        supportType: [FieldType.Number],
-      },
-      validator: {
-        required: true,
-      }
+      props: { supportType: [FieldType.Number] },
+      validator: { required: true },
+    },
+    {
+      key: 'sourceCurrency',
+      label: '选择源货币',
+      component: FieldComponent.SingleSelect,
+      defaultValue: { label: 'CNY - ¥ 人民币', value: 'CNY' },
+      props: { options: currencyOptions },
+      validator: { required: true },
+    },
+    {
+      key: 'targetCurrency',
+      label: '选择目标货币',
+      component: FieldComponent.SingleSelect,
+      defaultValue: { label: 'USD - $ 美元', value: 'USD' },
+      props: { options: currencyOptions },
+      validator: { required: true },
     },
   ],
-  // 定义捷径的返回结果类型
+
   resultType: {
     type: FieldType.Object,
     extra: {
@@ -48,90 +73,57 @@ basekit.addField({
         light: 'https://lf3-static.bytednsdoc.com/obj/eden-cn/eqgeh7upeubqnulog/chatbot.svg',
       },
       properties: [
+        { key: 'id', type: FieldType.Text, title: 'ID', isGroupByKey: true, hidden: true },
+        { key: 'amount', type: FieldType.Number, title: '换算金额', primary: true },
         {
-          key: 'id',
-          isGroupByKey: true,
-          type: FieldType.Text,
-          title: 'id',
-          hidden: true,
-        },
-        {
-          key: 'usd',
-          type: FieldType.Number,
-          title: t('usd'),
-          primary: true,
-          extra: {
-            formatter: NumberFormatter.DIGITAL_ROUNDED_2,
-          }
-        },
-        {
-          key: 'rate',
-          type: FieldType.Number,
-          title: t('rate'),
-          extra: {
-            formatter: NumberFormatter.DIGITAL_ROUNDED_4,
-          }
+          key: 'rateInfo',
+          type: FieldType.Number, 
+          title: '参考汇率',
         },
       ],
     },
   },
-  // formItemParams 为运行时传入的字段参数，对应字段配置里的 formItems （如引用的依赖字段）
-  execute: async (formItemParams: { account: number }, context) => {
-    const { account = 0 } = formItemParams;
-    /** 为方便查看日志，使用此方法替代console.log */
-    function debugLog(arg: any) {
-      // @ts-ignore
-      console.log(JSON.stringify({
-        formItemParams,
-        context,
-        arg
-      }))
-    }
+
+  execute: async (formItemParams, context) => {
     try {
-      const res: any = await context.fetch('https://api.exchangerate-api.com/v4/latest/CNY', { // 已经在addDomainList中添加为白名单的请求
-        method: 'GET',
-      }).then(res => res.json());
-      const usdRate = res?.rates?.['USD'];
+      const { sourceAmountField, sourceCurrency, targetCurrency } = formItemParams;
+      const amount = sourceAmountField as number;
+      const fromCurrency = sourceCurrency.value;
+      const toCurrency = targetCurrency.value;
 
-      // 请避免使用 debugLog(res) 这类方式输出日志，因为所查到的日志是没有顺序的，为方便排查错误，对每个log进行手动标记顺序
-      debugLog({
-        '===1 接口返回结果': res
-      });
+      if (typeof amount !== 'number') { return { code: FieldCode.InvalidArgument, data: null }; }
+      
+      let rateForInfo = 1.0; 
+      if (fromCurrency === toCurrency) {
+        return { code: FieldCode.Success, data: { id: Date.now().toString(), amount, rateInfo: rateForInfo } };
+      }
+
+      const apiUrl = `https://api.exchangerate-api.com/v4/latest/${fromCurrency}`;
+      const response = await context.fetch(apiUrl);
+
+      if (!response.ok) { return { code: FieldCode.Error, data: null }; }
+
+      const exchangeData = await response.json();
+      const rate = exchangeData?.rates?.[toCurrency];
+      
+      if (!rate) { return { code: FieldCode.Error, data: null }; }
+
+      const result = amount * rate;
+      rateForInfo = parseFloat(rate.toFixed(4));
 
       return {
         code: FieldCode.Success,
         data: {
-          id: `${Math.random()}`,
-          usd: parseFloat((account * usdRate).toFixed(4)),
-          rate: usdRate,
-        }
-      }
-
-      /*
-        如果错误原因明确，想要向使用者传递信息，要避免直接报错，可将错误信息当作成功结果返回：
-
-      return {
-        code: FieldCode.Success,
-        data: {
-          id: `具体错误原因`,
-          usd: 0,
-          rate: 0,
-        }
-      }
-
-      */
+          id: Date.now().toString(),
+          amount: result,
+          rateInfo: rateForInfo,
+        },
+      };
     } catch (e) {
-      console.log('====error', String(e));
-      debugLog({
-        '===999 异常错误': String(e)
-      });
-      /** 返回非 Success 的错误码，将会在单元格上显示报错，请勿返回msg、message之类的字段，它们并不会起作用。
-       * 对于未知错误，请直接返回 FieldCode.Error，然后通过查日志来排查错误原因。
-       */
-      return {
-        code: FieldCode.Error,
-      }
+      console.log(JSON.stringify({ logID: context.logID, error: e.toString() }));
+      return { code: FieldCode.Error, data: null };
     }
   },
 });
+
 export default basekit;
